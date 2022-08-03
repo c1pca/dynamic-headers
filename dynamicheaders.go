@@ -2,7 +2,6 @@ package dynamicheaders
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/caddyserver/caddy/v2"
@@ -14,50 +13,62 @@ import (
 
 func init() {
 	caddy.RegisterModule(DynamicHeaders{})
-	httpcaddyfile.RegisterHandlerDirective("dymanic_header", parseCaddyfile)
+	httpcaddyfile.RegisterHandlerDirective("dynamic_headers", parseCaddyfile)
 }
 
 // DynamicHeaders Middleware implements an HTTP handler that writes
-// writes headers dynamically.
+// headers dynamically.
 type DynamicHeaders struct {
 	// The file or stream to write to. Can be "stdout"
 	// or "stderr".
 	ToHeader   string `json:"to_header,omitempty"`
 	FromHeader string `json:"from_header,omitempty"`
-	log        *zap.Logger
-	w          io.Writer
+	logger     *zap.SugaredLogger
 }
 
 // CaddyModule returns the Caddy module information.
 func (DynamicHeaders) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
-		ID:  "http.handlers.dymanic_header",
+		ID:  "http.handlers.dynamic_headers",
 		New: func() caddy.Module { return new(DynamicHeaders) },
 	}
 }
 
 // Provision implements caddy.Provisioner.
 func (m *DynamicHeaders) Provision(ctx caddy.Context) error {
+	m.logger = ctx.Logger(m).Sugar()
 	if m.FromHeader != "" {
-
+		m.logger.Debugf("FromHeader: %s", m.FromHeader)
 	}
 	if m.ToHeader != "" {
-
+		m.logger.Debugf("ToHeader: %s", m.ToHeader)
 	}
 	return nil
 }
 
 // Validate implements caddy.Validator.
 func (m *DynamicHeaders) Validate() error {
-	if m.w == nil {
-		return fmt.Errorf("no writer")
+	if m.ToHeader == "" {
+		return fmt.Errorf("provide to_header key to set the copied value")
+	}
+	if m.ToHeader == "" {
+		return fmt.Errorf("provide from_header key to copy its value")
 	}
 	return nil
 }
 
 // ServeHTTP implements caddyhttp.MiddlewareHandler.
 func (m DynamicHeaders) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	m.w.Write([]byte(r.RemoteAddr))
+	m.logger.Debugf("Value from %s is copied to %s header", m.FromHeader, m.ToHeader)
+	value := r.Header.Get(m.FromHeader)
+
+	if value == "" {
+		m.logger.Errorf("header %s has no value", m.FromHeader)
+	} else {
+		m.logger.Debugf("header %s has value: %s", m.FromHeader, value)
+		w.Header().Add(m.ToHeader, value)
+	}
+
 	return next.ServeHTTP(w, r)
 }
 
@@ -71,9 +82,9 @@ func (m *DynamicHeaders) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 		}
 
 		switch key {
-		case "redis_url":
+		case "to_header":
 			m.ToHeader = value
-		case "path_prefix":
+		case "from_header":
 			m.FromHeader = value
 
 		default:
