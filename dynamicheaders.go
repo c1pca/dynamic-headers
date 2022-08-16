@@ -60,13 +60,14 @@ func (m *DynamicHeaders) Validate() error {
 // ServeHTTP implements caddyhttp.MiddlewareHandler.
 func (m DynamicHeaders) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	m.logger.Debugf("Value from %s is copied to %s header", m.FromHeader, m.ToHeader)
-	value := r.Header.Get(m.FromHeader)
+	values := r.Header.Values(m.FromHeader)
 
-	if value == "" {
-		m.logger.Errorf("header %s has no value", m.FromHeader)
-	} else {
-		m.logger.Debugf("header %s has value: %s", m.FromHeader, value)
+	if len(values) > 0 {
+		value := values[0]
+		m.logger.Debugf("header %s has value: %s", m.FromHeader, values)
 		w.Header().Add(m.ToHeader, value)
+	} else {
+		m.logger.Errorf("header %s has no values", m.FromHeader)
 	}
 
 	return next.ServeHTTP(w, r)
