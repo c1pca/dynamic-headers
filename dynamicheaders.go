@@ -21,8 +21,9 @@ func init() {
 type DynamicHeaders struct {
 	// The file or stream to write to. Can be "stdout"
 	// or "stderr".
+	TakeHost   bool   `json:"take_host"`
 	ToHeader   string `json:"to_header,omitempty"`
-	FromHeader string `json:"from_header,omitempty"`
+	FromHeader string `json:"from_header"`
 	logger     *zap.SugaredLogger
 }
 
@@ -38,6 +39,9 @@ func (DynamicHeaders) CaddyModule() caddy.ModuleInfo {
 func (m *DynamicHeaders) Provision(ctx caddy.Context) error {
 	m.logger = ctx.Logger(m).Sugar()
 	if m.FromHeader != "" {
+		m.logger.Debugf("TakeHost: %s", m.TakeHost)
+	}
+	if m.FromHeader != "" {
 		m.logger.Debugf("FromHeader: %s", m.FromHeader)
 	}
 	if m.ToHeader != "" {
@@ -51,20 +55,25 @@ func (m *DynamicHeaders) Validate() error {
 	if m.ToHeader == "" {
 		return fmt.Errorf("provide to_header key to set the copied value")
 	}
-	if m.ToHeader == "" {
-		return fmt.Errorf("provide from_header key to copy its value")
+	if m.FromHeader == "" && !m.TakeHost {
+		return fmt.Errorf("provide from_header or host to copy its value")
 	}
 	return nil
 }
 
 // ServeHTTP implements caddyhttp.MiddlewareHandler.
 func (m DynamicHeaders) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	m.logger.Debugf("Value from %s is copied to %s header", m.FromHeader, m.ToHeader)
-	values := r.Header.Values(m.FromHeader)
+	values := []string{}
+	if m.TakeHost {
+		host := r.Host
+		values = append(values, host)
+	} else {
+		values = r.Header.Values(m.FromHeader)
+	}
 
 	if len(values) > 0 {
 		value := values[0]
-		m.logger.Debugf("header %s has value: %s", m.FromHeader, values)
+		m.logger.Debugf("Value %s is set to %s header", values, m.ToHeader)
 		w.Header().Add(m.ToHeader, value)
 	} else {
 		m.logger.Errorf("header %s has no values", m.FromHeader)
@@ -87,6 +96,8 @@ func (m *DynamicHeaders) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 			m.ToHeader = value
 		case "from_header":
 			m.FromHeader = value
+		case "take_host":
+			m.TakeHost = true
 
 		default:
 			return fmt.Errorf("unknown key %s", key)

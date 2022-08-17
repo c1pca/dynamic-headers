@@ -27,7 +27,8 @@ xcaddy build --output ./caddy.exe --with github.com/c1pca/dynamic-headers
                 {
                   "handler": "dynamic_headers",
                   "to_header": "test_dynamic_header_1",
-                  "from_header": "Connection"
+                  "from_header": "Connection", // optional parameter
+                  "take_host": true
                 },
                 {
                 "handler": "reverse_proxy",
