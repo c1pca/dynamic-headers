@@ -74,7 +74,7 @@ func (m DynamicHeaders) ServeHTTP(w http.ResponseWriter, r *http.Request, next c
 	if len(values) > 0 {
 		value := values[0]
 		m.logger.Debugf("Value %s is set to %s header", values, m.ToHeader)
-		w.Header().Add(m.ToHeader, value)
+		r.Header.Add(m.ToHeader, value)
 	} else {
 		m.logger.Errorf("header %s has no values", m.FromHeader)
 	}
